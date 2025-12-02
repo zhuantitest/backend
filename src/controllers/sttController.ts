@@ -7,10 +7,11 @@ import { parseSpokenExpense } from '../utils/spokenParser';
 import { hybridClassify } from '../utils/aiFilter';
 import { createRecordNotification } from './notificationController';
 
-const keyFileFromEnv = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-const speechClient = keyFileFromEnv
-  ? new SpeechClient() // 使用 GOOGLE_APPLICATION_CREDENTIALS
-  : new SpeechClient({ keyFilename: './gcp-vision-key.json' }); // 後備路徑
+const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS!);
+
+const speechClient = new SpeechClient({
+  credentials
+});
 
 type SttAlternative = {
   transcript?: string;

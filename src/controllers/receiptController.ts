@@ -8,8 +8,10 @@ import { parseReceiptText } from '../services/parse-receipt'; // 只拿函式
 import { ParsedReceipt } from '../types/receipt';   
 
 
+const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS!);
+
 const client = new vision.ImageAnnotatorClient({
-  keyFilename: './gcp-vision-key.json',
+  credentials
 });
 
 // Google Vision OCR

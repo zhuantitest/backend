@@ -3,9 +3,10 @@ import vision from '@google-cloud/vision';
 import fs from 'fs/promises';
 import path from 'path';
 
-// 建立 Vision 客戶端
+const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS!);
+
 const client = new vision.ImageAnnotatorClient({
-  keyFilename: path.join(__dirname, '../../gcp-vision-key.json'), // 請確認金鑰檔案位置
+  credentials
 });
 
 // 圖片預處理：旋轉、裁切、增強清晰度
