@@ -326,10 +326,10 @@ export interface RequestContext {
 declare global {
   namespace Express {
     interface Request {
-      user?: User;
-      userId?: string;
-      file?: FileUpload;
-      files?: FileUpload[];
+      user?: { userId: number };  // 後端 JWT 解析後就是這個
+      file?: Express.Multer.File; // 與 Multer 相容
+      files?: Express.Multer.File[] | { [fieldname: string]: Express.Multer.File[] };
     }
   }
 }
+
