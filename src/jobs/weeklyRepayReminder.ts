@@ -4,7 +4,7 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 function isoWeekKey(d = new Date()) {
-  const tz = 8 * 60 * 60 * 1000; // Asia/Taipei
+  const tz = 8 * 60 * 60 * 1000;
   const local = new Date(d.getTime() + tz);
   const day = local.getDay() || 7;
   const thursday = new Date(local);
@@ -17,7 +17,7 @@ function isoWeekKey(d = new Date()) {
 function weekRangeTaipei(anchor = new Date()) {
   const tz = 8 * 60 * 60 * 1000;
   const local = new Date(anchor.getTime() + tz);
-  const day = local.getDay() || 7; // Mon=1..Sun=7
+  const day = local.getDay() || 7;
   const startLocal = new Date(local.getFullYear(), local.getMonth(), local.getDate() - (day - 1), 0, 0, 0, 0);
   const endLocal = new Date(startLocal.getFullYear(), startLocal.getMonth(), startLocal.getDate() + 7, 0, 0, 0, 0);
   return { start: new Date(+startLocal - tz), end: new Date(+endLocal - tz) };
@@ -45,38 +45,51 @@ export async function runWeeklyRepayReminder(opts?: RunOpts) {
     },
   });
 
-  // group by (userId, groupId)
-  const agg = new Map<string, { userId: number; groupId: number; groupName: string; total: number }>();
+  const agg = new Map<
+    string,
+    { userId: number; groupId: number | null; groupName: string; total: number }
+  >();
+
   for (const r of rows) {
-    const key = `${r.userId}:${r.split.groupId}`;
+    const gid = r.split.groupId ?? null;
+    const key = `${r.userId}:${gid ?? 'nogroup'}`;
+
     const curr = agg.get(key) || {
       userId: r.userId,
-      groupId: r.split.groupId,
+      groupId: gid,
       groupName: r.split.group?.name || '',
       total: 0,
     };
+
     curr.total += Number(r.amount) || 0;
     agg.set(key, curr);
   }
 
-  let created = 0, skipped = 0;
+  let created = 0,
+    skipped = 0;
+
   for (const { userId, groupId, groupName, total } of agg.values()) {
-    const tag = `#gid=${groupId}#week=${wk}`;
+    const tag = `#gid=${groupId ?? 'nogroup'}#week=${wk}`;
+
     const exists = await prisma.notification.findFirst({
       where: {
         userId,
-        type: 'repayment',
         createdAt: { gte: start, lt: end },
         message: { contains: tag },
       },
       select: { id: true },
     });
-    if (exists) { skipped++; continue; }
+
+    if (exists) {
+      skipped++;
+      continue;
+    }
 
     const message = `還款提醒：群組「${groupName}」尚有應付 NT$${Math.round(total)}。${tag}`;
+
     if (!opts?.dryRun) {
       await prisma.notification.create({
-        data: { userId, type: 'repayment', message },
+        data: { userId, message }, // ← 不再使用 type（除非你有在 Prisma schema 加欄位）
       });
     }
     created++;
@@ -86,8 +99,11 @@ export async function runWeeklyRepayReminder(opts?: RunOpts) {
 }
 
 export function scheduleWeeklyRepayReminder() {
-  // 週一 09:00 Asia/Taipei
-  cron.schedule('0 9 * * 1', () => {
-    runWeeklyRepayReminder().catch((e) => console.error('[weeklyRepayReminder]', e));
-  }, { timezone: 'Asia/Taipei' });
+  cron.schedule(
+    '0 9 * * 1',
+    () => {
+      runWeeklyRepayReminder().catch((e) => console.error('[weeklyRepayReminder]', e));
+    },
+    { timezone: 'Asia/Taipei' }
+  );
 }
