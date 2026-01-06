@@ -4,18 +4,33 @@ import fs from 'fs';
 import path from 'path';
 import vision from '@google-cloud/vision';
 
-import { parseReceiptText } from '../services/parse-receipt'; // 只拿函式
-import { ParsedReceipt } from '../types/receipt';   
+import { parseReceiptText } from '../services/parse-receipt';
+import { ParsedReceipt } from '../types/receipt';
 
+let visionClient: InstanceType<typeof vision.ImageAnnotatorClient> | null = null;
 
-const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS!);
+function getVisionClient() {
+  if (visionClient) return visionClient;
 
-const client = new vision.ImageAnnotatorClient({
-  credentials
-});
+  const raw = process.env.GOOGLE_VISION_KEY;
+  if (!raw) {
+    throw new Error('GOOGLE_VISION_KEY is missing');
+  }
+
+  let credentials;
+  try {
+    credentials = JSON.parse(raw);
+  } catch {
+    throw new Error('GOOGLE_VISION_KEY is not valid JSON');
+  }
+
+  visionClient = new vision.ImageAnnotatorClient({ credentials });
+  return visionClient;
+}
 
 // Google Vision OCR
 async function extractTextFromImage(filePath: string): Promise<string> {
+  const client = getVisionClient();
   const [result] = await client.textDetection(filePath);
   const detections = result.textAnnotations;
   return detections && detections.length > 0 ? detections[0].description || '' : '';
@@ -30,7 +45,6 @@ export const parseReceiptController = async (req: Request, res: Response) => {
     const imagePath = path.resolve(req.file.path);
     const rawText = await extractTextFromImage(imagePath);
 
-    // 使用新的 AI 增強解析功能
     const userId = req.user?.userId;
     const parsedReceipt: ParsedReceipt = await parseReceiptText(rawText, userId);
 
@@ -43,7 +57,7 @@ export const parseReceiptController = async (req: Request, res: Response) => {
         date: parsedReceipt.date,
         filteredCount: parsedReceipt.filteredCount,
         totalCount: parsedReceipt.totalCount,
-        rawText, // 用於除錯
+        rawText,
       },
     });
   } catch (error: any) {
@@ -93,4 +107,3 @@ export const parseReceiptTextController = async (req: Request, res: Response) =>
     });
   }
 };
-
