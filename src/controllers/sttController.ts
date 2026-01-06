@@ -161,3 +161,105 @@ export async function transcribeAudio(req: Request, res: Response) {
     });
   }
 }
+
+// ===== 純文字 STT（不用音檔）=====
+export async function sttFromText(req: Request, res: Response) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ message: '未登入' });
+
+    const textRaw = String(req.body?.text ?? '').trim();
+    if (!textRaw) {
+      return res.status(400).json({ message: 'text 必填' });
+    }
+
+    const parsedResult = parseSpokenExpense(textRaw);
+
+    let finalCategory = parsedResult.category;
+    let categorySource = 'local';
+
+    if (!finalCategory && parsedResult.note) {
+      try {
+        const aiResult = await hybridClassify(parsedResult.note, userId);
+        finalCategory = aiResult.category;
+        categorySource = aiResult.source;
+      } catch {
+        finalCategory = '其他';
+        categorySource = 'error';
+      }
+    }
+
+    return res.json({
+      text: textRaw,
+      amount: parsedResult.amount,
+      note: parsedResult.note,
+      category: finalCategory,
+      account: parsedResult.account,
+      confidence: parsedResult.confidence,
+      categorySource,
+      suggestions: parsedResult.suggestions,
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      message: '解析失敗',
+      error: err?.message || String(err),
+    });
+  }
+}
+
+// ===== 快速語音記帳 =====
+export async function quickVoiceRecord(req: Request, res: Response) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ message: '未登入' });
+
+    const { text, accountId, groupId } = req.body;
+    if (!text || !accountId) {
+      return res.status(400).json({ message: '缺少必要欄位 text 或 accountId' });
+    }
+
+    const parsedResult = parseSpokenExpense(text);
+    if (!parsedResult.amount || !parsedResult.note) {
+      return res.status(400).json({
+        message: '無法解析記帳內容',
+        suggestions: parsedResult.suggestions,
+      });
+    }
+
+    let finalCategory = parsedResult.category;
+    if (!finalCategory) {
+      try {
+        const aiResult = await hybridClassify(parsedResult.note, userId);
+        finalCategory = aiResult.category;
+      } catch {
+        finalCategory = '其他';
+      }
+    }
+
+    const { PrismaClient } = require('@prisma/client');
+    const prisma = new PrismaClient();
+
+    const record = await prisma.record.create({
+      data: {
+        amount: parsedResult.amount,
+        note: parsedResult.note,
+        category: finalCategory,
+        quantity: 1,
+        accountId: Number(accountId),
+        groupId: groupId ? Number(groupId) : null,
+        paymentMethod: parsedResult.account || '現金',
+        userId,
+      },
+    });
+
+    return res.status(201).json({
+      message: '語音記帳建立成功',
+      record,
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      message: '語音記帳建立失敗',
+      error: err?.message || String(err),
+    });
+  }
+}
