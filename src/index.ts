@@ -40,6 +40,12 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// ✅ Railway / Load Balancer 健康檢查（一定要有）
+app.get('/', (_req, res) => {
+  res.status(200).send('OK');
+});
+
+
 // 靜態檔（若有上傳圖片）
 app.use('/uploads', express.static('uploads'));
 
