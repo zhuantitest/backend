@@ -31,17 +31,24 @@ async function createAndSendCode(userId: number, emailRaw: string) {
     data: { email, code, userId, used: false, expiresAt },
   })
 
-  await resend.emails.send({
-    from: `Moneyko <${process.env.MAIL_FROM}>`,
-    to: email,
-    subject: '帳號驗證碼',
-    html: `
-      <p>您的驗證碼為：</p>
-      <h2 style="letter-spacing:2px">${code}</h2>
-      <p>10 分鐘內有效，請勿轉寄。</p>
-    `,
-  })
+  try {
+    const result = await resend.emails.send({
+      from: `Moneyko <${process.env.MAIL_FROM}>`,
+      to: email,
+      subject: '帳號驗證碼',
+      html: `
+        <p>您的驗證碼為：</p>
+        <h2>${code}</h2>
+      `,
+    })
+
+    console.log('[MAIL] sent:', result)
+  } catch (err) {
+    console.error('[MAIL] send failed:', err)
+    throw err
+  }
 }
+
 
 /* =========================
    若使用者沒有帳戶 → 建立預設現金帳戶
