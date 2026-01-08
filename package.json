@@ -30,7 +30,6 @@
     "export:csv": "tsx scripts/export-train-csv.ts"
   },
   "dependencies": {
-    "tsx": "^4.20.4",
     "@google-cloud/documentai": "^9.4.0",
     "@google-cloud/speech": "^7.2.0",
     "@google-cloud/vision": "^5.3.2",
@@ -52,7 +51,9 @@
     "node-fetch": "^3.3.2",
     "nodemailer": "^7.0.5",
     "pdfkit": "^0.17.1",
+    "resend": "^6.6.0",
     "sharp": "^0.34.3",
+    "tsx": "^4.20.4",
     "uuid": "^11.1.0"
   },
   "devDependencies": {

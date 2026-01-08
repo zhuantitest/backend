@@ -2,10 +2,11 @@ import { Request, Response } from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { PrismaClient } from '@prisma/client'
-import nodemailer from 'nodemailer'
+import { Resend } from 'resend'
 import { JWT_SECRET, JWT_EXPIRES_IN, previewToken } from '../config/jwt'
 
 const prisma = new PrismaClient()
+const resend = new Resend(process.env.RESEND_API_KEY)
 
 // 1=統一回覆「帳號或密碼錯誤」；0=分別回覆「帳號不存在 / 密碼錯誤」
 const UNIFIED_LOGIN_ERROR = (process.env.UNIFIED_LOGIN_ERROR ?? '1') === '1'
@@ -13,17 +14,6 @@ const UNIFIED_LOGIN_ERROR = (process.env.UNIFIED_LOGIN_ERROR ?? '1') === '1'
 // ===== 驗證碼寄送限制 =====
 const RESEND_COOLDOWN_SEC = 60
 const DAILY_RESEND_LIMIT = 5
-
-// Gmail 寄信設定
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD,
-  },
-  logger: process.env.MAIL_DEBUG === '1',
-  debug: process.env.MAIL_DEBUG === '1',
-})
 
 function normalizeEmail(s: string) {
   return (s || '').trim().toLowerCase()
@@ -41,11 +31,15 @@ async function createAndSendCode(userId: number, emailRaw: string) {
     data: { email, code, userId, used: false, expiresAt },
   })
 
-  await transporter.sendMail({
-    from: `"Moneyko" <${process.env.GMAIL_USER}>`,
+  await resend.emails.send({
+    from: `Moneyko <${process.env.MAIL_FROM}>`,
     to: email,
     subject: '帳號驗證碼',
-    text: `您的驗證碼為：${code}（10 分鐘內有效）`,
+    html: `
+      <p>您的驗證碼為：</p>
+      <h2 style="letter-spacing:2px">${code}</h2>
+      <p>10 分鐘內有效，請勿轉寄。</p>
+    `,
   })
 }
 
@@ -128,7 +122,7 @@ export const sendVerificationCode = async (req: Request, res: Response) => {
       cooldownSec: RESEND_COOLDOWN_SEC,
       dailyLimit: DAILY_RESEND_LIMIT,
     })
-  } catch (err: any) {
+  } catch (err) {
     console.error('[sendVerificationCode] error:', err)
     return res.status(500).json({ message: '伺服器錯誤' })
   }
@@ -170,7 +164,7 @@ export const verifyCode = async (req: Request, res: Response) => {
     ])
 
     return res.json({ message: '驗證成功' })
-  } catch (err: any) {
+  } catch (err) {
     console.error('[verifyCode] error:', err)
     return res.status(500).json({ message: '伺服器錯誤' })
   }
@@ -185,6 +179,7 @@ export const register = async (req: Request, res: Response) => {
     if (typeof name !== 'string' || typeof email !== 'string' || typeof password !== 'string') {
       return res.status(400).json({ message: 'name、email、password 為必填字串' })
     }
+
     name = name.trim()
     email = normalizeEmail(email)
     password = password.trim()
@@ -211,8 +206,12 @@ export const register = async (req: Request, res: Response) => {
 
     await createAndSendCode(newUser.id, newUser.email)
 
-    return res.status(201).json({ success: true, userId: newUser.id, message: '註冊成功，驗證碼已寄出' })
-  } catch (err: any) {
+    return res.status(201).json({
+      success: true,
+      userId: newUser.id,
+      message: '註冊成功，驗證碼已寄出',
+    })
+  } catch (err) {
     console.error('[register] error:', err)
     return res.status(500).json({ message: '伺服器錯誤' })
   }
@@ -227,12 +226,15 @@ export const login = async (req: Request, res: Response) => {
     if (typeof email !== 'string' || typeof password !== 'string') {
       return res.status(400).json({ message: 'email、password 為必填字串' })
     }
+
     email = normalizeEmail(email)
     password = password.trim()
 
     const user = await prisma.user.findUnique({ where: { email } })
     if (!user) {
-      return res.status(400).json({ message: UNIFIED_LOGIN_ERROR ? '帳號或密碼錯誤' : '帳號不存在' })
+      return res.status(400).json({
+        message: UNIFIED_LOGIN_ERROR ? '帳號或密碼錯誤' : '帳號不存在',
+      })
     }
 
     if (!user.isVerified) {
@@ -241,12 +243,16 @@ export const login = async (req: Request, res: Response) => {
 
     const isMatch = await bcrypt.compare(password, user.password)
     if (!isMatch) {
-      return res.status(400).json({ message: UNIFIED_LOGIN_ERROR ? '帳號或密碼錯誤' : '密碼錯誤' })
+      return res.status(400).json({
+        message: UNIFIED_LOGIN_ERROR ? '帳號或密碼錯誤' : '密碼錯誤',
+      })
     }
 
     await ensureDefaultAccount(user.id)
 
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN })
+    const token = jwt.sign({ userId: user.id }, JWT_SECRET, {
+      expiresIn: JWT_EXPIRES_IN,
+    })
 
     console.log('[Auth] Login success:', {
       id: user.id,
@@ -259,14 +265,14 @@ export const login = async (req: Request, res: Response) => {
       token,
       user: { id: user.id, name: user.name, email: user.email },
     })
-  } catch (err: any) {
+  } catch (err) {
     console.error('[login] error:', err)
     return res.status(500).json({ message: '伺服器錯誤' })
   }
 }
 
 /* =========================
-   重設密碼（寄送 + 更新）
+   重設密碼（寄送）
 ========================= */
 export const sendResetCode = async (req: Request, res: Response) => {
   try {
@@ -277,7 +283,9 @@ export const sendResetCode = async (req: Request, res: Response) => {
     email = normalizeEmail(email)
 
     const user = await prisma.user.findUnique({ where: { email } })
-    if (!user) return res.json({ message: '若帳號存在將會寄送驗證碼', cooldownSec: RESEND_COOLDOWN_SEC })
+    if (!user) {
+      return res.json({ message: '若帳號存在將會寄送驗證碼', cooldownSec: RESEND_COOLDOWN_SEC })
+    }
 
     const now = new Date()
     const last = await prisma.emailVerification.findFirst({
@@ -297,7 +305,9 @@ export const sendResetCode = async (req: Request, res: Response) => {
       where: { email, createdAt: { gte: dayAgo } },
     })
     if (sentToday >= DAILY_RESEND_LIMIT) {
-      return res.status(429).json({ message: `今日寄送次數已達上限（${DAILY_RESEND_LIMIT} 次）` })
+      return res.status(429).json({
+        message: `今日寄送次數已達上限（${DAILY_RESEND_LIMIT} 次）`,
+      })
     }
 
     await prisma.emailVerification.updateMany({
@@ -306,6 +316,7 @@ export const sendResetCode = async (req: Request, res: Response) => {
     })
 
     await createAndSendCode(user.id, email)
+
     return res.json({ message: '已寄出重設密碼驗證碼', cooldownSec: RESEND_COOLDOWN_SEC })
   } catch (err) {
     console.error('[sendResetCode] error:', err)
@@ -313,12 +324,16 @@ export const sendResetCode = async (req: Request, res: Response) => {
   }
 }
 
+/* =========================
+   重設密碼（更新）
+========================= */
 export const resetPassword = async (req: Request, res: Response) => {
   try {
     let { email, newPassword } = req.body || {}
     if (typeof email !== 'string' || typeof newPassword !== 'string') {
       return res.status(400).json({ message: 'email 與 newPassword 為必填字串' })
     }
+
     email = normalizeEmail(email)
     newPassword = newPassword.trim()
 
@@ -326,7 +341,10 @@ export const resetPassword = async (req: Request, res: Response) => {
     if (!user) return res.json({ message: '密碼已更新（若帳號存在）' })
 
     const hashed = await bcrypt.hash(newPassword, 10)
-    await prisma.user.update({ where: { id: user.id }, data: { password: hashed } })
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashed },
+    })
 
     return res.json({ message: '密碼已更新' })
   } catch (err) {
