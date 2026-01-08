@@ -1,13 +1,8 @@
-import vision from '@google-cloud/vision';
+
 // import sharp from 'sharp'; // 暫時註解，避免依賴問題
 import fs from 'fs/promises';
 import path from 'path';
-
-const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS!);
-
-const client = new vision.ImageAnnotatorClient({
-  credentials
-});
+import { getVisionClient } from '../services/visionClient';
 
 // 圖片預處理：旋轉、裁切、增強清晰度
 async function preprocessImage(imagePath: string): Promise<Buffer> {
@@ -33,7 +28,8 @@ export async function processImageOcr(imagePath: string) {
     await fs.writeFile(tempPath, processedImage);
 
     // 呼叫 Google Vision OCR
-    const [result] = await client.textDetection(tempPath);
+    const client = getVisionClient();
+const [result] = await client.textDetection(tempPath);
     const detections = result.textAnnotations || [];
 
     const fullText = detections.length > 0 ? detections[0].description : '';

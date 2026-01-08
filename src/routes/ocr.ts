@@ -1,7 +1,7 @@
 // src/routes/ocr.ts
 import express from 'express';
 import multer from 'multer';
-import vision from '@google-cloud/vision';
+import { getVisionClient } from '../services/visionClient';
 import { getCategory } from '../utils/classifier';
 import { CATEGORY_KEYWORDS, DRINK_TOKENS } from '../utils/keyword';
 
@@ -11,7 +11,6 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 8 * 1024 * 1024 },
 });
-const client = new vision.ImageAnnotatorClient();
 
 /* ---------------- OCR 前處理工具 ---------------- */
 const toHalf = (s: string) =>
@@ -189,7 +188,11 @@ router.post('/receipt-items', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: 'no file' });
 
-    const [result] = await client.documentTextDetection({ image: { content: req.file.buffer } });
+    const client = getVisionClient();
+const [result] = await client.documentTextDetection({
+  image: { content: req.file.buffer },
+});
+
     const text =
       result.fullTextAnnotation?.text ||
       result.textAnnotations?.[0]?.description ||

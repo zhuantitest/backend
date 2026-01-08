@@ -2,35 +2,9 @@
 import { Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
-import vision from '@google-cloud/vision';
-
+import { getVisionClient } from '../services/visionClient';
 import { parseReceiptText } from '../services/parse-receipt';
 import { ParsedReceipt } from '../types/receipt';
-
-let visionClient: InstanceType<typeof vision.ImageAnnotatorClient> | null = null;
-
-function getVisionClient() {
-  if (visionClient) return visionClient;
-
-  const raw = process.env.GOOGLE_VISION_KEY;
-  if (!raw) {
-    throw new Error('GOOGLE_VISION_KEY is missing');
-  }
-
-  const credentials = JSON.parse(raw);
-  const { project_id } = credentials;
-
-  if (!project_id) {
-    throw new Error('project_id missing in GOOGLE_VISION_KEY');
-  }
-
-  visionClient = new vision.ImageAnnotatorClient({
-    credentials,
-    projectId: project_id,
-  });
-
-  return visionClient;
-}
 
 // Google Vision OCR
 async function extractTextFromImage(filePath: string): Promise<string> {

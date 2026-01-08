@@ -4,7 +4,7 @@ import fs from 'fs';
 import fsp from 'fs/promises';
 import path from 'path';
 import sharp from 'sharp';
-import vision from '@google-cloud/vision';
+import { getVisionClient } from '../services/visionClient';
 import { getCategory } from '../utils/classifier';
 
 // API 對外結構
@@ -67,10 +67,6 @@ async function cropToTempByROI(srcPath: string, roi: ROI) {
   return tmp;
 }
 
-const client = new vision.ImageAnnotatorClient({
-  credentials: JSON.parse(process.env.GOOGLE_VISION_KEY as string),
-});
-
 export const parseOcr = async (req: Request, res: Response) => {
   const file = req.file;
   if (!file) {
@@ -93,6 +89,7 @@ export const parseOcr = async (req: Request, res: Response) => {
     }
 
     // 1) OCR
+    const client = getVisionClient();
     const [result] = await client.textDetection(ocrPath);
     const detections = result.textAnnotations || [];
     const ocrText = detections.length > 0 ? (detections[0].description || '') : '';
