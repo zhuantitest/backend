@@ -17,14 +17,18 @@ function getVisionClient() {
     throw new Error('GOOGLE_VISION_KEY is missing');
   }
 
-  let credentials;
-  try {
-    credentials = JSON.parse(raw);
-  } catch {
-    throw new Error('GOOGLE_VISION_KEY is not valid JSON');
+  const credentials = JSON.parse(raw);
+  const { project_id } = credentials;
+
+  if (!project_id) {
+    throw new Error('project_id missing in GOOGLE_VISION_KEY');
   }
 
-  visionClient = new vision.ImageAnnotatorClient({ credentials });
+  visionClient = new vision.ImageAnnotatorClient({
+    credentials,
+    projectId: project_id,
+  });
+
   return visionClient;
 }
 
