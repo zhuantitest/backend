@@ -67,7 +67,9 @@ async function cropToTempByROI(srcPath: string, roi: ROI) {
   return tmp;
 }
 
-const client = new vision.ImageAnnotatorClient();
+const client = new vision.ImageAnnotatorClient({
+  credentials: JSON.parse(process.env.GOOGLE_VISION_KEY as string),
+});
 
 export const parseOcr = async (req: Request, res: Response) => {
   const file = req.file;
