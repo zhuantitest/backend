@@ -1,5 +1,6 @@
 // src/utils/classifier.ts
 import 'dotenv/config';
+import fetch from 'node-fetch';
 
 /** 動態讀取 HF Token（避免在 import 時就被鎖定） */
 const getHFToken = () => (process.env.HF_API_TOKEN?.trim() ?? '');
