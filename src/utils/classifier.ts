@@ -138,7 +138,7 @@ async function zeroShotRanked(input: string): Promise<RankedItem[]> {
 
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        const res = await fetch(`https://api-inference.huggingface.co/models/${encodeURIComponent(model)}`, {
+        const res = await fetch(`https://router.huggingface.co/hf-inference/models/${model}`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json; charset=utf-8' },
           body: JSON.stringify(payload),
