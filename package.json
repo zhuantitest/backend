@@ -2,6 +2,11 @@
   "name": "bookkeeper-backend",
   "version": "1.0.0",
   "main": "src/index.ts",
+
+  "overrides": {
+    "picomatch": "^4.0.3"
+  },
+
   "prisma": {
     "seed": "ts-node -P tsconfig.seed.json prisma/seed.ts"
   },

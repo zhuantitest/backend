@@ -5,12 +5,16 @@
     "moduleResolution": "node",
     "outDir": "./dist",
     "rootDir": ".",
+
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "typeRoots": ["./node_modules/@types", "./src/types"],
+
     "types": ["node"]
   },
-  "include": ["src/**/*", "scripts/**/*"]
+  "include": [
+    "src/**/*",
+    "scripts/**/*"
+  ]
 }
